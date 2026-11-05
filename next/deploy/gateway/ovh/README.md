@@ -4,6 +4,13 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-06 ccgateway **0.1.131**（`a4396d717`，北京时间 02:09–02:10；rollout 233，两节点 0.1.131，原有权限同意沿用）：
+- 内容：Worker + CLI 成对原地升级时，控制器把激活的 CLI 版本写进 `state.cli`（`1d9cd6761`）；此前只记 `runtime_image`，容器被删后重建会到新镜像里找旧 CLI 而失败。
+- 控制器换 `ccgateway-controller:0.1.131`（日志 "session state Valkey reachable (1 account users)"）；新账号镜像改为 `ccgateway-app:0.1.131`（不带 update_existing）。前后容器对比只有控制器变化；guard 仍 0.1.130（代码未变）。包 sha256 `2ce6cc9f…6530`，镜像见 `stage/ccgateway-0.1.131/images.txt`。
+- 线上没有用原地升级验证这条修复（会改老账号的 CLI 版本），只靠控制器单元测试（`TestPairRecordsTheActivatedCLIVersion`、`TestRecreationAfterAPairWithoutItsContainer`）。
+- 发布时 ccgateway 只剩 4 个未删除的账号（85、104、116、123），之前 3 小时内有 70 个被删除，不是本次发布造成的。
+- 回滚：`stage/ccgateway-0.1.131/rollout.py rollback`（回 0.1.130），再 `bundled-roles controller,app` 用 0.1.130 的镜像。
+
 2026-11-05～06 ccgateway **0.1.130** + 核心 **0.1.247** + 控制器宿主启用会话记忆 Valkey（都是 `45297934c`；北京时间 11-05 22:56 起至 11-06 00:22）：
 - 内容：新账号的 CLI 换成 Claude Code 2.1.318（v56b），带工具清单头 `x-claude-code-sandy-plover`；Worker 会话记忆改存控制器宿主上的 Valkey，按账号 ACL 隔离、TTL 24 小时（[迁移文档](../../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.318-MIGRATION.md)、[设计文档](../../../plugins/ccgateway/docs/SESSION-MEMORY-TOOLS-USED-DESIGN.md)）；核心加会话记忆设置。老账号保持原 CLI 与 Worker。
 - **手工删库（迁移脚本做不到）**：上传 0.1.130 时外壳回 503 "plugin package store is full"（外壳 0.1.132 起插件包存储上限 16 GiB，ovh 已用约 43 GB）。经用户同意，删除 `plugin_versions` 中 ccgateway 0.1.0～0.1.125 共 125 行，保留 0.1.126（builtin 绑定）～0.1.129；外壳 GC 随后回收 125 个包文件，存储降到 2.5 GB。删除前的行（`rows.csv`、`delete-list.csv`）和 40 GB 包文件（`blobs/`，逐个核对 `shas.txt`）在 `backups/plugin-versions-20261105/`，恢复时把行插回并把包文件放回外壳存储。
