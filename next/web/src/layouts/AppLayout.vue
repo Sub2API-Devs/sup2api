@@ -12,8 +12,9 @@ const route = useRoute()
 const { t } = useI18n()
 
 // The top bar shows the route title and the page description; a page header
-// with the same title is only its filters and actions.
-provideTitleContext(() => (route.meta.title ? t(route.meta.title as string) : ''), toRef(app, 'pageDescription'))
+// with the same title is only its filters and actions, and with no filters its
+// actions move into the top bar on a wide screen (AppTopbar's #s-page-actions).
+provideTitleContext(() => (route.meta.title ? t(route.meta.title as string) : ''), toRef(app, 'pageDescription'), '#s-page-actions')
 
 // The menus do not wait for the plugin modules: GET /me/menus already lists
 // plugin menus, and the fallback is a fixed dashboard entry.

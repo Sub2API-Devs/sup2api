@@ -117,7 +117,7 @@ onMounted(load)
 
 <template>
   <div>
-    <SPageHeader :title="t('plugins.list.title')" :description="t('plugins.list.description')">
+    <SPageHeader :title="t('nav.items.plugins')" :description="t('plugins.list.description')">
       <template #actions>
         <SButton :loading="loading" icon="refresh" @click="load">{{ t('common.refresh') }}</SButton>
         <SButton v-if="auth.has('plugin:market:read')" to="/market" icon="market">

@@ -13,7 +13,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { SButton, SDateRange, SPagination, type RangeKey, type TabItem } from '@sub2api/ui'
+import { SButton, SDateRange, SPagination, STableColumnSettings, type RangeKey, type TabItem } from '@sub2api/ui'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
@@ -103,6 +103,7 @@ function selectUser(id: string) {
 
 // CSV of the searched requests (the list's filters, not its page).
 const exporting = ref(false)
+const table = ref<InstanceType<typeof UsageTable> | null>(null)
 async function exportCsv() {
   exporting.value = true
   try {
@@ -143,11 +144,15 @@ async function exportCsv() {
       <template #actions>
         <slot name="actions" />
         <SButton v-if="tab === 'records' || tab === 'errors'" type="button" size="sm" icon="download" :loading="exporting" data-testid="export-usage" @click="exportCsv">{{ t('stats.exportCsv') }}</SButton>
+        <!-- The table's column settings sit in this row rather than on a row of their own above the table. -->
+        <STableColumnSettings v-if="table?.columnState && (tab === 'records' || tab === 'errors')" class="hidden md:block" :state="table.columnState" />
       </template>
     </UsageFilters>
 
     <UsageTable
       v-show="tab === 'records' || tab === 'errors'"
+      ref="table"
+      :column-settings="false"
       :rows="items"
       :loading="loading"
       :show-user="admin"

@@ -8,7 +8,7 @@
 // With `logTypes` the first filter picks what the page lists, as new-api's log
 // type does; it applies at once, with any filter typed so far. A type these
 // fields do not search (`searchable` = false) brings its own in #filters.
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, useSlots, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SButton, SIcon, SInput, SSelect } from '@sub2api/ui'
 
@@ -28,6 +28,9 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ 'update:modelValue': [value: Record<string, string>]; 'update:logType': [value: string]; reset: [] }>()
 const { t } = useI18n()
 const expanded = ref(false)
+const slots = useSlots()
+/** The stats and actions row; without either the reset and search buttons end the filter row. */
+const bottomRow = computed(() => !!slots.stats || !!slots.actions)
 const draft = reactive<Record<string, string>>({})
 const primary = [
   { key: 'model_contains', icon: 'cpu' },
@@ -92,7 +95,7 @@ function pickLogType(value: unknown) {
       </div>
       <div
         class="grid min-w-[16rem] flex-1 grid-cols-1 gap-2"
-        :class="searchable ? 'sm:grid-cols-[repeat(auto-fit,minmax(9rem,1fr))]' : 'sm:grid-cols-[repeat(auto-fill,minmax(10rem,1fr))]'"
+        :class="searchable ? 'sm:grid-cols-[repeat(auto-fit,minmax(8rem,1fr))]' : 'sm:grid-cols-[repeat(auto-fill,minmax(10rem,1fr))]'"
       >
         <SSelect
           v-if="logTypes.length"
@@ -163,6 +166,29 @@ function pickLogType(value: unknown) {
           :class="expanded ? 'rotate-180' : ''"
         />
       </SButton>
+      <!-- With no stats or actions the reset and search buttons end this row instead of taking one of their own. -->
+      <div
+        v-if="searchable && !bottomRow"
+        class="ms-auto flex items-center gap-2"
+      >
+        <SButton
+          type="button"
+          size="sm"
+          data-testid="reset-usage-filters"
+          @click="reset"
+        >
+          {{ t('common.reset') }}
+        </SButton>
+        <SButton
+          type="submit"
+          variant="primary"
+          size="sm"
+          icon="search"
+          data-testid="search-usage"
+        >
+          {{ t('common.search') }}
+        </SButton>
+      </div>
     </div>
     <div
       v-if="expanded && searchable"
@@ -205,7 +231,7 @@ function pickLogType(value: unknown) {
       />
     </div>
     <div
-      v-if="searchable"
+      v-if="searchable && bottomRow"
       class="mt-3 flex flex-wrap items-center gap-2"
     >
       <slot name="stats" />

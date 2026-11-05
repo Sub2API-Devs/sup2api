@@ -106,4 +106,13 @@ describe('shared usage search', () => {
     expect(w.emitted('update:modelValue')![0]![0]).not.toHaveProperty('user_id')
     expect(w.text()).not.toContain('usage.search.')
   })
+
+  it('ends the filter row with reset and search when there is no stats or actions row', () => {
+    const bare = mount(UsageFilters, { props: { modelValue: {} }, global })
+    expect(bare.find('.mt-3').exists()).toBe(false)
+    expect(bare.get('[data-testid="filter-success"]').element.closest('form > div')).toBe(bare.get('[data-testid="search-usage"]').element.closest('form > div'))
+    const full = mount(UsageFilters, { props: { modelValue: {} }, slots: { stats: '<span>stats</span>' }, global })
+    expect(full.get('.mt-3').find('[data-testid="search-usage"]').exists()).toBe(true)
+    expect(full.findAll('[data-testid="search-usage"]')).toHaveLength(1)
+  })
 })

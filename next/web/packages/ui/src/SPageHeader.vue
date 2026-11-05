@@ -2,16 +2,34 @@
 // Page header. When the title repeats the app top bar's (see
 // provideTitleContext) the title is not drawn again and the description
 // moves into the top bar, so the header is a single toolbar row: #filters on
-// the left, #actions on the right. Otherwise (detail pages, nested scopes) it
-// is a title block with the actions beside it and the filters below.
-import { computed, onBeforeUnmount, useSlots, watchEffect } from 'vue'
-import { useDescriptionSink, useTitleVisibility } from './titleContext'
+// the left, #actions on the right. With no #filters the actions alone would
+// take that row, so on a wide screen they move into the top bar beside the
+// title instead. Otherwise (detail pages, nested scopes) it is a title block
+// with the actions beside it and the filters below.
+import { computed, onBeforeUnmount, onMounted, ref, useSlots, watchEffect } from 'vue'
+import { useActionsTarget, useDescriptionSink, useTitleVisibility } from './titleContext'
 const props = defineProps<{ title: string; description?: string }>()
 const slots = useSlots()
 const showTitle = useTitleVisibility(() => props.title)
 const sink = useDescriptionSink()
+const actionsTarget = useActionsTarget()
 const lifted = computed(() => !showTitle.value && !!sink && !slots.before && !slots['title-extra'])
 const headed = computed(() => showTitle.value || !!slots.before || !!slots['title-extra'] || (!!props.description && !lifted.value))
+
+// The top bar hides the description below md; the actions stay in the page there too.
+const WIDE = '(min-width: 768px)'
+const wide = ref(typeof window !== 'undefined' && !!window.matchMedia?.(WIDE).matches)
+let media: MediaQueryList | undefined
+const onMedia = (e: MediaQueryListEvent) => (wide.value = e.matches)
+onMounted(() => {
+  media = window.matchMedia?.(WIDE)
+  if (!media) return
+  wide.value = media.matches
+  media.addEventListener?.('change', onMedia)
+})
+onBeforeUnmount(() => media?.removeEventListener?.('change', onMedia))
+const actionsUp = computed(() => !!actionsTarget && lifted.value && !headed.value && !slots.filters && !!slots.actions && wide.value)
+
 let owned = ''
 watchEffect(() => {
   if (!sink) return
@@ -54,8 +72,20 @@ onBeforeUnmount(() => {
       <slot name="actions" />
     </div>
   </div>
+  <Teleport
+    v-if="actionsUp"
+    defer
+    :to="actionsTarget!"
+  >
+    <div
+      class="flex shrink-0 items-center gap-2"
+      data-testid="page-actions"
+    >
+      <slot name="actions" />
+    </div>
+  </Teleport>
   <div
-    v-if="$slots.filters || (!headed && $slots.actions)"
+    v-else-if="$slots.filters || (!headed && $slots.actions)"
     class="mb-3 flex flex-wrap items-end gap-2"
   >
     <div

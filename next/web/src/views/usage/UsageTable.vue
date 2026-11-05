@@ -24,8 +24,10 @@ const props = withDefaults(
     showClientRequestId?: boolean
     detailPath?: (id: number) => string
     columnSettingsKey?: string
+    /** false when the page draws the column settings itself (from the exposed columnState), e.g. in its toolbar. */
+    columnSettings?: boolean
   }>(),
-  { showUser: true, showAccount: true, showClientRequestId: false }
+  { showUser: true, showAccount: true, showClientRequestId: false, columnSettings: true }
 )
 const emit = defineEmits<{
   (e: 'filter-client-request-id', id: string): void
@@ -48,6 +50,7 @@ const columns = computed<TableColumn[]>(() => [
 ])
 const columnState = useTableColumns(columns, () => props.columnSettingsKey)
 const { visibleColumns, isVisible } = columnState
+defineExpose({ columnState })
 const keyName = (row: UsageRow) => row.api_key_name || (row.api_key_id ? '#' + row.api_key_id : '—')
 const groupName = (row: UsageRow) => row.group_name || (row.group_id ? '#' + row.group_id : '')
 const userName = (row: UsageRow) => row.user_email || row.user_name || '#' + row.user_id
@@ -66,7 +69,10 @@ function toggleMobile(id: number) {
 
 <template>
   <div class="usage-records">
-    <div class="mb-2 flex justify-end">
+    <div
+      v-if="columnSettings"
+      class="mb-2 flex justify-end"
+    >
       <STableColumnSettings :state="columnState" />
     </div>
     <STable
